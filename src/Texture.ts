@@ -8,7 +8,7 @@ export class Texture {
 
     loaded: boolean = false;
 
-    constructor(gl: WebGL2RenderingContext, url: string) {
+    constructor(gl: WebGL2RenderingContext, url: string, set: boolean = false) {
         this.texture = gl.createTexture();
         if (this.texture === null) throw new Error('Error loading texture');
 
@@ -21,7 +21,7 @@ export class Texture {
             this.width = this.image.width;
             this.height = this.image.height;
 
-            this.set(gl);
+            if (set) this.set(gl);
 
             this.loaded = true; // TODO: check for errors
         }

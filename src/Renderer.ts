@@ -8,6 +8,10 @@ import {
 import {Camera} from './Camera'
 import {Texture} from "./Texture";
 import f from './resources/GJ_GameSheet-uhd.png'
+import {Level} from "./Level";
+import ATLAS_1 from "./resources/GJ_GameSheet-uhd.png";
+import ATLAS_2 from "./resources/GJ_GameSheet02-uhd.png";
+import ATLAS_3 from "./resources/FireSheet_01-uhd.png";
 
 export class Renderer {
     gl: WebGL2RenderingContext;
@@ -31,6 +35,8 @@ export class Renderer {
 
     debug = false;
 
+    level?: Level;
+
     constructor(canvas: HTMLElement | null) {
         if (!canvas) throw new Error('Canvas not given')
         if (!(canvas instanceof HTMLCanvasElement)) throw new Error('Must be type of canvas')
@@ -46,24 +52,36 @@ export class Renderer {
         this.pInfo = createProgramInfo(gl, [VSH_SRC, FSH_SRC])
     }
 
+    loadLevel(data: string) {
+        this.level = new Level(data)
+    }
+
+    async initialize() {
+        let gl = this.gl;
+        let program = this.pInfo.program;
+
+        await Level.loadAtlas(gl, ATLAS_1);
+        await Level.loadAtlas(gl, ATLAS_2);
+        await Level.loadAtlas(gl, ATLAS_3);
+        console.log('Block textures & data loaded');
+    }
+
     draw() {
         let gl = this.gl;
         let program = this.pInfo.program;
 
-        resizeCanvasToDisplaySize(this.canvas);
-
         let positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-        let textureAttributeLocation = gl.getAttribLocation(program, "a_texcoord");
+        this.data['textureAttributeLocation'] = gl.getAttribLocation(program, "a_texcoord");
 
-        let matrixLocation = gl.getUniformLocation(program, "u_matrix");
+        this.data['matrixLocation'] = gl.getUniformLocation(program, "u_matrix");
 
         let colorLocation = gl.getUniformLocation(program, "u_color");
 
         let positionBuffer = gl.createBuffer();
 
-        let vao = gl.createVertexArray();
+        this.data['vao'] = gl.createVertexArray();
 
-        gl.bindVertexArray(vao);
+        gl.bindVertexArray(this.data['vao']);
 
         gl.enableVertexAttribArray(positionAttributeLocation);
 
@@ -80,72 +98,28 @@ export class Renderer {
 
         gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 0, 0);
 
-        let texcoordBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+        gl.enable(gl.DEPTH_TEST);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-        gl.bufferData(gl.ARRAY_BUFFER,
-            new Float32Array([
-                912 / 4095, 1313 / 4095,
-                912 / 4095, (1313 + 118) / 4095,
-                (912 + 118) / 4095, (1313 + 118) / 4095,
-                912 / 4095, (1313 + 118) / 4095,
-                (912 + 118) / 4095, (1313 + 118) / 4095,
-                (912 + 118) / 4095, 1313 / 4095,
-            ]),
-            gl.STATIC_DRAW)
+        resizeCanvasToDisplaySize(this.canvas);
 
-        gl.enableVertexAttribArray(textureAttributeLocation);
-
-        gl.vertexAttribPointer(textureAttributeLocation, 2, gl.FLOAT, true, 0, 0);
-
-        if (!this.texture) this.texture = new Texture(gl, f)
-
-        // draw ----------------
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 
         gl.clearColor(0.8, 0.95, 0.92, 1);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-        gl.enable(gl.DEPTH_TEST);
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.bindVertexArray(this.data['vao']);
 
-        gl.useProgram(program);
-
-        gl.bindVertexArray(vao);
-
-        let scaleFactor = 5;
-        let size = 80 * scaleFactor;
-        let x = gl.canvas.width / 2 - size / 2;
-        let y = gl.canvas.height - size - 60;
-
-        let matrix = m4.ortho(0, gl.canvas.width, gl.canvas.height, 0, -1, 1);
-        matrix = m4.translate(matrix, [(Math.sin(this.time * 0.02) + 1) * 250, (Math.cos(this.time * 0.02) + 1) * 250, 0]);
-        matrix = m4.scale(matrix, [100, 100, 1]);
-        matrix = m4.translate(matrix, [0.5, 0.5, 0]);
-        matrix = m4.scale(matrix, [Math.sin(this.time * 0.03) + 2, Math.sin(this.time * 0.03) + 2, 1]);
-        matrix = m4.rotateZ(matrix, 0.06 * this.time);
-        matrix = m4.translate(matrix, [-0.5, -0.5, 0]);
-
-        gl.bindTexture(gl.TEXTURE_2D, this.texture.texture);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-
-        // Set the matrix.
-        gl.uniformMatrix4fv(matrixLocation, false, matrix);
-
-        for (let i = 0; i < 1; ++i) {
-            // this.setRectangle(gl,
-            //     0,
-            //     0,
-            //     1,
-            //     1.0
-            // );
-
-            //gl.uniform4f(colorLocation, Math.random(), Math.random(), Math.random(), 1);
-
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
+        if (this.level) {
+            for (let i = 0; i < this.level.objects.length; i++) {
+                this.drawObject(
+                    this.level.objects[i][1],
+                    parseInt(this.level.objects[i][2]),
+                    parseInt(this.level.objects[i][3]),
+                    this.level.objects[i][6]
+                );
+            }
         }
 
         this.time++;
@@ -153,15 +127,57 @@ export class Renderer {
         requestAnimationFrame(this.draw.bind(this));
     }
 
-    setRectangle(gl: WebGL2RenderingContext, x1: number, y1: number, width: number, height: number) {
-        let x2 = x1 + width, y2 = y1 + height;
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-            x1, y1,
-            x2, y1,
-            x1, y2,
-            x1, y2,
-            x2, y1,
-            x2, y2,
-        ]), gl.STATIC_DRAW);
+    drawObject(id: number, x: number, y: number, rot: number) {
+        const s = Level.sprites[Level.blocks[id] + '.png']
+        let gl = this.gl;
+
+        // Missing block texture
+        if (!s) {
+            console.log([id, Level.blocks[id]])
+            return;
+        }
+
+        gl.useProgram(this.pInfo.program);
+
+        let texcoordBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+
+        let tex = Level.atlases[s.atlas];
+        let sx = s['textureRect'][0][0];
+        let sy = s['textureRect'][0][1];
+        let lx = s['textureRect'][1][0];
+        let ly = s['textureRect'][1][1];
+
+        gl.bufferData(gl.ARRAY_BUFFER,
+            new Float32Array([
+                sx / 4095, sy / 4095,
+                sx / 4095, (sy + ly) / 4095,
+                (sx + lx) / 4095, (sy + ly) / 4095,
+                sx / 4095, (sy + ly) / 4095,
+                (sx + lx) / 4095, (sy + ly) / 4095,
+                (sx + lx) / 4095, sy / 4095,
+            ]),
+            gl.STATIC_DRAW)
+
+        gl.enableVertexAttribArray(this.data['textureAttributeLocation']);
+
+        gl.vertexAttribPointer(this.data['textureAttributeLocation'], 2, gl.FLOAT, true, 0, 0);
+
+        let matrix = m4.ortho(0, gl.canvas.width, gl.canvas.height, 0, -1, 1);
+        matrix = m4.translate(matrix, [100, 100, 0]);
+        matrix = m4.scale(matrix, [100, 100, 1]);
+        matrix = m4.translate(matrix, [0.5, 0.5, 0]);
+        matrix = m4.rotateZ(matrix, rot * Math.PI / 180);
+        matrix = m4.translate(matrix, [-0.5, -0.5, 0]);
+
+        gl.bindTexture(gl.TEXTURE_2D, tex.texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+
+        // Set the matrix.
+        gl.uniformMatrix4fv(this.data['matrixLocation'], false, matrix);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 }

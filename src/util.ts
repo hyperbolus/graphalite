@@ -1,5 +1,6 @@
 import {mat3} from 'gl-matrix';
 import {Renderer} from "./Renderer";
+import {Texture} from "./Texture";
 
 export type RGBA = {
     r: number;
