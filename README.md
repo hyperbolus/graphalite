@@ -1,4 +1,4 @@
-![Banner](/docs/banner.svg)
+![Banner](./docs/banner.svg)
 
 # About
 Graphalite is a library to render Geometry Dash levels

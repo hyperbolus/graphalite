@@ -1,16 +1,28 @@
 "use strict";
 
 import {Renderer} from "./Renderer";
-import {Level} from "./Level";
 
 import LEVEL from './levels/4284013.keyed?raw'
-import ATLAS_1 from './resources/GJ_GameSheet-uhd.png'
-import ATLAS_2 from './resources/GJ_GameSheet02-uhd.png'
-import ATLAS_3 from './resources/FireSheet_01-uhd.png'
 
 (async () => {
     const renderer = new Renderer(document.getElementById('display'));
     await renderer.initialize()
+
+    let speed = 50
+
+    document.addEventListener('keydown', (e) => {
+        switch (e.key) {
+            case 'w': renderer.camera.y += speed; break;
+            case 'a': renderer.camera.x -= speed; break;
+            case 's': renderer.camera.y -= speed; break;
+            case 'd': renderer.camera.x += speed; break;
+            case 'q': renderer.camera.angle += 0.1; break;
+            case 'e': renderer.camera.angle -= 0.1; break;
+        }
+
+        renderer.draw()
+    })
+
     renderer.loadLevel(LEVEL)
     renderer.draw();
 })()

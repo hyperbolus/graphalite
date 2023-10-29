@@ -1,17 +1,18 @@
 import FSH_SRC from './shaders/default.frag?raw'
 import VSH_SRC from './shaders/default.vert?raw'
 import {
-    createProgramInfo, m4,
+    createProgramInfo, drawBufferInfo, m4,
     ProgramInfo,
-    resizeCanvasToDisplaySize
+    resizeCanvasToDisplaySize, setUniforms
 } from 'twgl.js'
 import {Camera} from './Camera'
 import {Texture} from "./Texture";
-import f from './resources/GJ_GameSheet-uhd.png'
 import {Level} from "./Level";
 import ATLAS_1 from "./resources/GJ_GameSheet-uhd.png";
 import ATLAS_2 from "./resources/GJ_GameSheet02-uhd.png";
 import ATLAS_3 from "./resources/FireSheet_01-uhd.png";
+import {mat4} from "gl-matrix";
+import Mat4 = m4.Mat4;
 
 export class Renderer {
     gl: WebGL2RenderingContext;
@@ -70,10 +71,12 @@ export class Renderer {
         let gl = this.gl;
         let program = this.pInfo.program;
 
-        let positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-        this.data['textureAttributeLocation'] = gl.getAttribLocation(program, "a_texcoord");
+        resizeCanvasToDisplaySize(this.canvas);
 
-        this.data['matrixLocation'] = gl.getUniformLocation(program, "u_matrix");
+        this.data['a_position'] = gl.getAttribLocation(program, "a_position");
+        this.data['a_texcoord'] = gl.getAttribLocation(program, "a_texcoord");
+
+        this.data['u_matrix'] = gl.getUniformLocation(program, "u_matrix");
 
         let colorLocation = gl.getUniformLocation(program, "u_color");
 
@@ -82,11 +85,9 @@ export class Renderer {
         this.data['vao'] = gl.createVertexArray();
 
         gl.bindVertexArray(this.data['vao']);
-
-        gl.enableVertexAttribArray(positionAttributeLocation);
+        gl.enableVertexAttribArray(this.data['a_position']);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
             0, 0, 0,
             0, 1, 0,
@@ -95,88 +96,95 @@ export class Renderer {
             1, 0, 0,
             1, 1, 0,
         ]), gl.STATIC_DRAW);
-
-        gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 0, 0);
-
-        gl.enable(gl.DEPTH_TEST);
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-        resizeCanvasToDisplaySize(this.canvas);
+        gl.vertexAttribPointer(this.data['a_position'], 3, gl.FLOAT, false, 0, 0);
 
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 
         gl.clearColor(0.8, 0.95, 0.92, 1);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-        gl.bindVertexArray(this.data['vao']);
+        gl.useProgram(program);
 
-        if (this.level) {
-            for (let i = 0; i < this.level.objects.length; i++) {
-                this.drawObject(
-                    this.level.objects[i][1],
-                    parseInt(this.level.objects[i][2]),
-                    parseInt(this.level.objects[i][3]),
-                    this.level.objects[i][6]
-                );
+        let projectionMatrix = m4.perspective(1, gl.canvas.width / gl.canvas.height, 1, 500000);
+        //projectionMatrix = m4.ortho(0, gl.canvas.width, gl.canvas.height, 0, -1, 1);
+
+        var cameraMatrix = m4.rotateY(projectionMatrix, this.camera.angle);
+        cameraMatrix = m4.translate(cameraMatrix, [this.camera.x, this.camera.y, 1500]);
+
+        var viewMatrix = m4.inverse(cameraMatrix);
+
+        var viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
+
+        this.drawObject(viewProjectionMatrix, 1, 1, 1)
+
+        for (let i = 0; i < 50; i++) {
+            let obj = this.level?.objects[i];
+            if (this.camera.x === 0) {
+                this.camera.x = parseInt(obj[2])
+                this.camera.y = parseInt(obj[3])
             }
+            this.drawObject(viewProjectionMatrix, parseInt(obj[1]), parseInt(obj[2])/50, (parseInt(obj[3]))/50)
+            //this.drawObject(parseInt(obj[1]), parseInt(obj[2]), parseInt(obj[3]), parseInt(obj[6] ?? 0), parseInt(obj[22] ?? 1))
         }
 
         this.time++;
 
-        requestAnimationFrame(this.draw.bind(this));
+        //requestAnimationFrame(this.draw.bind(this));
     }
 
-    drawObject(id: number, x: number, y: number, rot: number) {
-        const s = Level.sprites[Level.blocks[id] + '.png']
+    drawObject(matrix: Mat4, id: number, x: number, y: number, rot: number = 0, scale: number = 1) {
         let gl = this.gl;
-
-        // Missing block texture
+        const s = Level.sprites[Level.blocks[id] + '.png']
         if (!s) {
             console.log([id, Level.blocks[id]])
             return;
         }
 
-        gl.useProgram(this.pInfo.program);
-
         let texcoordBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
-
-        let tex = Level.atlases[s.atlas];
+        Level.atlases[s.atlas].set(gl);
+        let aw = Level.atlases[s.atlas].width;
+        let ah = Level.atlases[s.atlas].height;
         let sx = s['textureRect'][0][0];
         let sy = s['textureRect'][0][1];
         let lx = s['textureRect'][1][0];
         let ly = s['textureRect'][1][1];
-
         gl.bufferData(gl.ARRAY_BUFFER,
             new Float32Array([
-                sx / 4095, sy / 4095,
-                sx / 4095, (sy + ly) / 4095,
-                (sx + lx) / 4095, (sy + ly) / 4095,
-                sx / 4095, (sy + ly) / 4095,
-                (sx + lx) / 4095, (sy + ly) / 4095,
-                (sx + lx) / 4095, sy / 4095,
+                sx / aw, sy / ah,
+                sx / aw, (sy + ly) / ah,
+                (sx + lx) / aw, (sy + ly) / ah,
+                sx / aw, sy / ah,
+                (sx + lx) / aw, sy / ah,
+                (sx + lx) / aw, (sy + ly) / ah
             ]),
             gl.STATIC_DRAW)
+        gl.enableVertexAttribArray(this.data['a_texcoord']);
+        gl.vertexAttribPointer(this.data['a_texcoord'], 2, gl.FLOAT, true, 0, 0);
 
-        gl.enableVertexAttribArray(this.data['textureAttributeLocation']);
+        gl.bindVertexArray(this.data['vao']);
 
-        gl.vertexAttribPointer(this.data['textureAttributeLocation'], 2, gl.FLOAT, true, 0, 0);
+        //matrix = m4.ortho(0, gl.canvas.width, gl.canvas.height, 0, -1, 1);
+        matrix = m4.scale(matrix, [s['textureRect'][1][0], s['textureRect'][1][1], 1]);
 
-        let matrix = m4.ortho(0, gl.canvas.width, gl.canvas.height, 0, -1, 1);
-        matrix = m4.translate(matrix, [100, 100, 0]);
-        matrix = m4.scale(matrix, [100, 100, 1]);
-        matrix = m4.translate(matrix, [0.5, 0.5, 0]);
-        matrix = m4.rotateZ(matrix, rot * Math.PI / 180);
-        matrix = m4.translate(matrix, [-0.5, -0.5, 0]);
+        // Move. 1.0 Equals a standard 1x1 block unit, not small steps
+        matrix = m4.translate(matrix, [x, y, 0]);
+        // Scale
+        if (scale !== 1) {
+            matrix = m4.scale(matrix, [scale, scale, 1]);
+        }
+        // Rotate
+        if (rot !== 0) {
+            matrix = m4.translate(matrix, [0.5, 0.5, 0]);
+            matrix = m4.rotateZ(matrix, rot * Math.PI / 180);
+            matrix = m4.translate(matrix, [-0.5, -0.5, 0]);
+        }
 
-        gl.bindTexture(gl.TEXTURE_2D, tex.texture);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.uniformMatrix4fv(this.data['u_matrix'], false, matrix);
 
-        // Set the matrix.
-        gl.uniformMatrix4fv(this.data['matrixLocation'], false, matrix);
+        gl.enable(gl.DEPTH_TEST);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
         gl.drawArrays(gl.TRIANGLES, 0, 6);
     }

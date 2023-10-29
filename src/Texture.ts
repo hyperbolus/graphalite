@@ -8,6 +8,8 @@ export class Texture {
 
     loaded: boolean = false;
 
+    isSet: boolean = false;
+
     constructor(gl: WebGL2RenderingContext, url: string, set: boolean = false) {
         this.texture = gl.createTexture();
         if (this.texture === null) throw new Error('Error loading texture');
@@ -30,7 +32,10 @@ export class Texture {
 
     set(gl: WebGL2RenderingContext) {
         gl.bindTexture(gl.TEXTURE_2D, this.texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.image);
+        if (!this.isSet) {
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.image);
+            this.isSet = true;
+        }
         //gl.generateMipmap(gl.TEXTURE_2D);
 
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
