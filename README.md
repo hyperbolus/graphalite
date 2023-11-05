@@ -4,11 +4,26 @@
 Graphalite is a library to render Geometry Dash levels
 
 # Usage
-When you find out, let me know too
+See: `src/main.ts`
+
+Toggle `Renderer.debug` to enable devtools window.
+
+Event listeners will probably be moved in the Renderer or Camera classes.  
+> [!IMPORTANT]  
+> `loadLevel()` expects a un-b64 encoded un-gzipped level object string.  
+> It should be semi-colon (;) delimited.
+
+# Test
+```sh
+pnpm dev
+```
 
 # Credits
 - Absolute for the blocks.h file I turned into JSON
-- IliasHDZ I was originally gonna credit for GDViewer/GDRenderW but their code ended up actually teaching my nothing about using WebGL and I used nothing from it so I guess credit for inspiring and doing it first probably
+- IliasHDZ inspiration from GDViewer/GDRenderW
+- Colon for sprite viewer which helped in development
+- maxnut and GDRender contributors for object.json
+- fig for carrying my dumb ass
 
 # License
 This software is distributed under the MIT License
