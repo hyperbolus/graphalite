@@ -13,7 +13,9 @@
     "vite": "^4.4.5"
   },
   "dependencies": {
+    "@tweakpane/core": "^2.0.1",
     "gl-matrix": "^3.4.3",
+    "tweakpane": "^4.0.1",
     "twgl.js": "^5.5.3"
   }
 }

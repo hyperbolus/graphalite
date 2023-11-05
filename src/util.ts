@@ -15,6 +15,19 @@ export type RGB = {
     b: number;
 };
 
+export const COL_BG = 1000;
+export const COL_G1 = 1001;
+export const COL_LINE = 1002;
+export const COL_3DL = 1003;
+export const COL_OBJ = 1004;
+export const COL_P1 = 1005;
+export const COL_P2 = 1006;
+export const COL_LBG = 1007;
+export const COL_G2 = 1009;
+export const COL_BLACK = 1010;
+
+export const DEG2PI = Math.PI / 180;
+
 /**
  * Creates and compiles the given shader and checks for errors. It then returns the shader.
  */
@@ -58,117 +71,19 @@ export function createProgram(gl: WebGL2RenderingContext, vertexShader: WebGLSha
     throw new Error(`Error creating shader: ${msg ?? "No Message"}`);
 }
 
-/**
- * Takes in given values and puts them in a WebGLBuffer
- */
-export function createBuffer(gl: WebGL2RenderingContext, values: number[]): WebGLBuffer {
-    let buffer = gl.createBuffer();
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(values), gl.STATIC_DRAW);
-
-    if (buffer === null) throw new Error('Could not create buffer');
-    return buffer;
+export function bufferVertexAttribute(gl: WebGL2RenderingContext, data: number[], location: GLint, size: number) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(location);
+    gl.vertexAttribPointer(location, size, gl.FLOAT, true, 0, 0);
 }
 
-/**
- * Enabling the given WebGLBuffer so that gl.drawArrays is called with it.
- * It will give the values contained in the buffer to the GPU to render.
- * It also asks for how the buffer is layouted and what components to give.
- */
-export function enableBuffer(gl: WebGL2RenderingContext, buffer: WebGLBuffer, attr: number, size: number) {
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.vertexAttribPointer(attr, size, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(attr);
-}
-
-/**
- * Enabling the given WebGLTexture so that gl.drawArrays is called with it.
- * It will take the texture and give it as a uniform for the shaders to use.
- */
-export function enableTexture(gl: WebGL2RenderingContext, texture: WebGLTexture, uLocation: WebGLUniformLocation) {
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.uniform1i(uLocation, 0);
-}
-
-/**
- * It takes in the texture cutout out of the spreadsheet and sets the correct uniforms of the cutout.
- * The cutout is 0.6 pixels smaller to avoid texture leaking from the nearing textures in the sheet.
- */
-export function setTexture(renderer: Renderer, texture: Texture, tex: {x: number, y: number, w:number, h:number}) {
-    if (texture.loaded) return false;
-
-    const TEXTURE_INSET = 0.6;
-    let texM = mat3.create();
-
-    mat3.translate(texM, texM, [(tex.x + TEXTURE_INSET) / texture.width, (tex.y + TEXTURE_INSET) / texture.height]);
-    mat3.scale(texM, texM, [(tex.w - TEXTURE_INSET * 2) / texture.width, (tex.h - TEXTURE_INSET) / texture.height]);
-
-    renderer.gl.uniformMatrix3fv(renderer.data['textM'], false, texM);
-}
-
-/**
- * Sets the texture so that it renders the whole thing.
- */
-export function setFullTexture(renderer: Renderer) {
-    renderer.gl.uniformMatrix3fv(renderer.data['textM'], false, mat3.create());
-}
-
-/**
- * This sets the model matrix. The model matrix is the transformation of an object.
- * The vertex shader takes the model matrix in as 3 component matrix uniform and multiplies it
- * with the vertices of the texture rectangle so it applies the transformations.
- */
-export function setModelMatrix(renderer: Renderer, x: number, y: number, w: number, h: number = w, rot: number = 0) {
-    let model = mat3.create();
-
-    mat3.translate(model, model, [x, y]);
-
-    if (rot) mat3.rotate(model, model, (-rot) * Math.PI / 180);
-
-    h ? mat3.scale(model, model, [w, h]) : mat3.scale(model, model, [w, w])
-
-    renderer.gl.uniformMatrix3fv(renderer.data['u_model'], false, model);
-}
-
-/**
- * Sets the view matrix. The view matrix is the transformation of the view (basically the camera).
- * For the rest, it basically does the same thing as the model matrix.
- * If the x, y, zoom values are not given. It will use the camera in the GDRenderer.
- */
-export function setCamera(renderer: Renderer, x: number = renderer.camera.x, y: number = renderer.camera.y) {
-    renderer.gl.uniform1f(renderer.data['u_cx'], x);
-    renderer.gl.uniform1f(renderer.data['u_cy'], y);
-
-    let matrix = mat3.create();
-
-    mat3.scale(matrix, matrix, [renderer.camera.zoom, renderer.camera.zoom]);
-
-    renderer.gl.uniformMatrix3fv(renderer.data['u_view'], false, matrix);
-}
-
-export function color255(r = 255, g = 255, b = 255, a = 255) {
-    return {r, g, b, a};
-}
-
-/**
- * This sets the projection matrix so that the view looks 2d and normally scaled to the canvas.
- * Another example of a projection matrix is a perspective matrix that gives the 3d effect.
- */
-export function setProjection(renderer: Renderer) {
-    let matrix = mat3.create();
-    mat3.scale(matrix, matrix, [2 / renderer.width, 2 / renderer.height]);
-
-    renderer.gl.uniformMatrix3fv(renderer.data['u_proj'], false, matrix);
-}
-
-/**
- * Sets the tint of the object for the next gl.drawArrays call. This is what basically makes objects different colors.
- * The given tint is then multiplied with every pixel of the object.
- */
-export function setTint(gl: WebGL2RenderingContext, program: WebGLProgram, tint: RGBA) {
-    gl.uniform4fv(gl.getUniformLocation(program, "a_tint"), new Float32Array([tint.r, tint.g, tint.b, tint.a]));
+export function rotatePoint(x1: number, y1: number, x2: number, y2: number, a: number) {
+    if (!a) return [x1, y1];
+    return [
+        ((x1 - x2) * Math.cos(a)) - ((y1 - y2) * Math.sin(a)) + x2,
+        ((y1 - y2) * Math.cos(a)) + ((x1 - x2) * Math.sin(a)) + y2,
+    ];
 }
 
 export function getSpeedPortal(obj_id: number): number {
