@@ -4,15 +4,12 @@ import {createProgramInfo, m4, ProgramInfo, resizeCanvasToDisplaySize} from 'twg
 import {Camera} from './Camera'
 import {Texture} from "./Texture";
 import {Level} from "./Level";
-import ATLAS_1 from "./resources/GJ_GameSheet-uhd.png";
-import ATLAS_2 from "./resources/GJ_GameSheet02-uhd.png";
-import ATLAS_3 from "./resources/FireSheet_01-uhd.png";
 import OBJECTS from "./objects.json"
-import BG_1 from "./resources/game_bg_01_001-uhd.png";
 import {Pane} from 'tweakpane';
 import {ReadonlyMat4, vec2} from "gl-matrix";
 import {bufferVertexAttribute, COL_BG, DEG2PI, rotatePoint} from "./util";
 import {Annotation} from "./Annotation";
+import {RendererOptions} from "./RendererOptions";
 
 export class Renderer {
     gl: WebGL2RenderingContext;
@@ -28,7 +25,7 @@ export class Renderer {
 
     height: number = 0;
 
-    static debug: boolean = false;
+    debug: boolean = false;
     flags: any = {
         offsetX: false,
         offsetY: false,
@@ -47,27 +44,40 @@ export class Renderer {
 
     fps: number = 0;
 
-    constructor(canvas: HTMLElement | null, overlay?: HTMLElement | null) {
-        if (!canvas) throw new Error('Canvas not given')
-        if (!(canvas instanceof HTMLCanvasElement)) throw new Error('Must be type of canvas')
-        this.canvas = canvas;
-        let gl = canvas.getContext('webgl2', {
+    options: RendererOptions;
+
+    constructor(options: RendererOptions) {
+        this.options = options;
+        if (!options.canvas) throw new Error('Canvas not given')
+        if (!(options.canvas instanceof HTMLCanvasElement)) throw new Error('Must be type of canvas')
+        this.canvas = options.canvas;
+        let gl = this.canvas.getContext('webgl2', {
             premultipliedAlpha: false // TODO: Need this?
         });
         if (!gl) throw new Error('Failed to create WebGL2 context');
         this.gl = gl;
         this.pInfo = createProgramInfo(gl, [VSH_SRC, FSH_SRC])
 
-        window.addEventListener('resize', () => {
-            this.camera.dirty = true
-            resizeCanvasToDisplaySize(this.canvas);
-        });
-
-        if (overlay instanceof HTMLElement) {
-            Annotation.overlay = overlay;
+        if (options.overlay instanceof HTMLElement) {
+            Annotation.overlay = options.overlay;
         } else {
             console.info('[Graphalite]\nNo overlay element was passed. Annotations will not be drawn')
         }
+    }
+
+    destroy() {
+        let gl = this.gl;
+        let tus = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
+        for (let i = 0; i < tus; i++) {
+            gl.activeTexture(gl.TEXTURE0 + i);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        for (let i = 0; i < this.bgs.length; i++) {
+            this.bgs[i].destroy();
+        }
+        this.canvas.height = 1;
+        this.canvas.width = 1;
     }
 
     loadLevel(data: string) {
@@ -77,13 +87,62 @@ export class Renderer {
     async initialize() {
         let gl = this.gl;
 
-        await Level.loadAtlas(gl, ATLAS_1, 0);
-        await Level.loadAtlas(gl, ATLAS_2, 1);
-        await Level.loadAtlas(gl, ATLAS_3, 2);
+        if (this.options.container) {
+            let speed = 30
 
-        this.bgs[1] = new Texture(gl, BG_1);
+            this.options.container.addEventListener('keydown', (e) => {
+                switch (e.key) {
+                    case 'w':
+                        this.camera.y += speed;
+                        break;
+                    case 'a':
+                        this.camera.x -= speed;
+                        break;
+                    case 's':
+                        this.camera.y -= speed;
+                        break;
+                    case 'd':
+                        this.camera.x += speed;
+                        break;
+                    case 'q':
+                        this.camera.zoom += 1;
+                        break;
+                    case 'e':
+                        this.camera.zoom -= 1;
+                        break;
+                }
 
-        if (Renderer.debug) {
+                this.camera.dirty = true;
+            });
+
+            this.options.container.addEventListener('mousemove', (e) => {
+                if (e.buttons === 1) {
+                    this.camera.x -= e.movementX;
+                    this.camera.y += e.movementY;
+                    this.camera.dirty = true;
+                }
+            });
+
+            this.options.container.addEventListener('wheel', (e) => {
+                e.preventDefault();
+
+                if (e.ctrlKey) {
+                    this.camera.zoom -= e.deltaY / 100;
+                } else {
+                    this.camera.y -= e.deltaY;
+                    this.camera.x += e.deltaX;
+                }
+
+                this.camera.dirty = true;
+            }, {passive: false});
+        }
+
+        window.addEventListener('resize', () => {
+            this.camera.dirty = true
+            resizeCanvasToDisplaySize(this.canvas);
+        });
+
+        if (this.debug) {
             this.pane = new Pane()
 
             // FIXME: on('change') doesn't work causes infinite loop
@@ -167,9 +226,9 @@ export class Renderer {
             bufferVertexAttribute(gl, objData.colors, this.data['a_color'], 4);
 
             // Levels primarily use 3 sprite sheets. Let's activate them.
-            Level.atlases[Object.keys(Level.atlases)[0]].set(this.gl, gl.TEXTURE0);
-            Level.atlases[Object.keys(Level.atlases)[1]].set(this.gl, gl.TEXTURE1);
-            Level.atlases[Object.keys(Level.atlases)[2]].set(this.gl, gl.TEXTURE2);
+            Level.atlases[Object.keys(Level.atlases)[0]].set(gl.TEXTURE0);
+            Level.atlases[Object.keys(Level.atlases)[1]].set(gl.TEXTURE1);
+            Level.atlases[Object.keys(Level.atlases)[2]].set(gl.TEXTURE2);
             // Tell the shader what texture units to look in
             gl.uniform1iv(this.data['u_texture'], [0, 1, 2]);
 
@@ -377,7 +436,7 @@ export class Renderer {
         bufferVertexAttribute(gl, data.texcoods, this.data['a_texcoord'], 3);
         bufferVertexAttribute(gl, data.colors, this.data['a_color'], 4);
 
-        this.bgs[1].set(gl) // Activate texture
+        this.bgs[1].set() // Activate texture
         gl.uniform1iv(this.data['u_texture'], [0, 0, 0]); // Expects three values (I think)
         gl.uniformMatrix4fv(this.data['u_matrix'], false, matrix); // Use our world space matrix
 
@@ -413,10 +472,11 @@ export class Renderer {
         // We don't need to go hard, just use a new matrix and keep it in place. TODO: parallax?
         let matrix = m4.ortho(0, gl.canvas.width, gl.canvas.height, 0, -1, 1);
         const max = Math.max(gl.canvas.width, gl.canvas.height);
+        m4.translate(matrix, [0, -100, 0], matrix);
         m4.scale(matrix, [max, max, 1], matrix);
         gl.uniformMatrix4fv(this.data['u_matrix'], false, matrix);
         gl.uniform1iv(this.data['u_texture'], [0, 0, 0]);
-        this.bgs[1].set(gl)
+        this.bgs[1].set()
 
         gl.drawArrays(gl.TRIANGLES, 0, 6);
     }

@@ -8,6 +8,9 @@ dependencies:
   '@tweakpane/core':
     specifier: ^2.0.1
     version: 2.0.1
+  '@types/node':
+    specifier: ^20.8.10
+    version: 20.8.10
   gl-matrix:
     specifier: ^3.4.3
     version: 3.4.3
@@ -24,7 +27,7 @@ devDependencies:
     version: 5.2.2
   vite:
     specifier: ^4.4.5
-    version: 4.5.0
+    version: 4.5.0(@types/node@20.8.10)
 
 packages:
 
@@ -230,6 +233,11 @@ packages:
     resolution: {integrity: sha512-iJNrLrLffQR0I8mWgAWcMVO9ZPNdNeXZl66WNT+Op5L9FW7BSF6lwG3izR6Ki9CaI3HzIownwjzYS5xWUaokTA==}
     dev: false
 
+  /@types/node@20.8.10:
+    resolution: {integrity: sha512-TlgT8JntpcbmKUFzjhsyhGfP2fsiz1Mv56im6enJ905xG1DAYesxJaeSbGqQmAw8OWPdhyJGhGSQGKRNJ45u9w==}
+    dependencies:
+      undici-types: 5.26.5
+
   /esbuild@0.18.20:
     resolution: {integrity: sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA==}
     engines: {node: '>=12'}
@@ -318,7 +326,10 @@ packages:
     hasBin: true
     dev: true
 
-  /vite@4.5.0:
+  /undici-types@5.26.5:
+    resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
+
+  /vite@4.5.0(@types/node@20.8.10):
     resolution: {integrity: sha512-ulr8rNLA6rkyFAlVWw2q5YJ91v098AFQ2R0PRFwPzREXOUJQPtFUG0t+/ZikhaOCDqFoDhN6/v8Sq0o4araFAw==}
     engines: {node: ^14.18.0 || >=16.0.0}
     hasBin: true
@@ -346,6 +357,7 @@ packages:
       terser:
         optional: true
     dependencies:
+      '@types/node': 20.8.10
       esbuild: 0.18.20
       postcss: 8.4.31
       rollup: 3.29.4

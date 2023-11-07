@@ -1,68 +1,35 @@
 "use strict";
 
+import ATLAS_1 from './resources/GJ_GameSheet-uhd.png'
+import ATLAS_2 from './resources/GJ_GameSheet02-uhd.png'
+import ATLAS_3 from './resources/FireSheet_01-uhd.png'
+
+import P_ATLAS_1 from './resources/GJ_GameSheet-uhd.plist?url'
+import P_ATLAS_2 from './resources/GJ_GameSheet02-uhd.plist?url'
+import P_ATLAS_3 from './resources/FireSheet_01-uhd.plist?url'
+
+import BG_1 from './resources/game_bg_01_001-uhd.png'
+
 import {Renderer} from "./Renderer";
 
 import LEVEL from './levels/4284013.keyed?raw'
-//import LEVEL from './levels/Instinct_main_2.gmd?raw'
-import {Camera} from "./Camera";
 import {Annotation} from "./Annotation";
+import {Level} from "./Level";
+import {Texture} from "./Texture";
 
 (async () => {
-    const renderer = new Renderer(
-        document.getElementById('display')
-    );
-    await renderer.initialize()
-
-    let speed = 30
-
-    document.addEventListener('keydown', (e) => {
-        switch (e.key) {
-            case 'w':
-                renderer.camera.y += speed;
-                break;
-            case 'a':
-                renderer.camera.x -= speed;
-                break;
-            case 's':
-                renderer.camera.y -= speed;
-                break;
-            case 'd':
-                renderer.camera.x += speed;
-                break;
-            case 'q':
-                renderer.camera.zoom += 1;
-                break;
-            case 'e':
-                renderer.camera.zoom -= 1;
-                break;
-        }
-
-        renderer.camera.dirty = true;
+    const renderer = new Renderer({
+        canvas: document.getElementById('display'),
+        overlay: document.getElementById('overlay'),
+        container: document.getElementById('container'),
     });
 
-    document.addEventListener('mousemove', (e) => {
-        if (e.buttons === 1) {
-            renderer.camera.x -= e.movementX;
-            renderer.camera.y += e.movementY;
-            renderer.camera.dirty = true;
-        }
-    });
+    await Level.loadAtlas(renderer, ATLAS_1, P_ATLAS_1, 0);
+    await Level.loadAtlas(renderer, ATLAS_2, P_ATLAS_2, 1);
+    await Level.loadAtlas(renderer, ATLAS_3, P_ATLAS_3, 2);
+    renderer.bgs[1] = new Texture(renderer, BG_1);
 
-    document.addEventListener('wheel', (e) => {
-        e.preventDefault();
-
-        Camera.mx = e.clientX;
-        Camera.my = e.clientY;
-
-        if (e.ctrlKey) {
-            renderer.camera.zoom -= e.deltaY / 100;
-        } else {
-            renderer.camera.y -= e.deltaY;
-            renderer.camera.x += e.deltaX;
-        }
-
-        renderer.camera.dirty = true;
-    }, {passive: false});
+    await renderer.initialize();
 
     renderer.loadLevel(LEVEL);
     if (renderer.level) {

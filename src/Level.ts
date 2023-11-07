@@ -15,6 +15,7 @@ import {
 import BLOCKS from './blocks.json'
 import {Texture} from "./Texture";
 import {Annotation} from "./Annotation";
+import {Renderer} from "./Renderer";
 
 export class Level {
     objects: any;
@@ -104,12 +105,9 @@ export class Level {
         }
     }
 
-    static async loadAtlas(gl: WebGL2RenderingContext, path: string, tid?: number) {
-        Level.atlases[path] = new Texture(gl, path);
+    static async loadAtlas(renderer: Renderer, path: string, plist: string, tid?: number) {
+        Level.atlases[path] = new Texture(renderer, path);
         Level.atlases[path].tid = tid;
-        let frags = path.split('.');
-        frags.pop();
-        let name = frags.join('.')
-        this.parsePlist(await fetch(`${name}.plist`).then(res => res.text()), path);
+        this.parsePlist(await fetch(plist).then(res => res.text()), path);
     }
 }

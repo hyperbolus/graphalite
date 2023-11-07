@@ -1,8 +1,9 @@
 {
-  "name": "graphd",
-  "private": true,
+  "name": "graphalite",
+  "license": "MIT",
   "version": "0.1.0",
   "type": "module",
+  "main": "src/lib.ts",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -14,6 +15,7 @@
   },
   "dependencies": {
     "@tweakpane/core": "^2.0.1",
+    "@types/node": "^20.8.10",
     "gl-matrix": "^3.4.3",
     "tweakpane": "^4.0.1",
     "twgl.js": "^5.5.3"
