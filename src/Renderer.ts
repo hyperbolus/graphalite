@@ -472,7 +472,7 @@ export class Renderer {
         // We don't need to go hard, just use a new matrix and keep it in place. TODO: parallax?
         let matrix = m4.ortho(0, gl.canvas.width, gl.canvas.height, 0, -1, 1);
         const max = Math.max(gl.canvas.width, gl.canvas.height);
-        m4.translate(matrix, [0, -100, 0], matrix);
+        //m4.translate(matrix, [0, 0, 0], matrix); //TODO: fix, make anchor bottom or center
         m4.scale(matrix, [max, max, 1], matrix);
         gl.uniformMatrix4fv(this.data['u_matrix'], false, matrix);
         gl.uniform1iv(this.data['u_texture'], [0, 0, 0]);
