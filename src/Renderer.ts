@@ -269,6 +269,7 @@ export class Renderer {
         const data: any = {colors: [], texcoords: [], vertices: []};
 
         objs.forEach((o) => {
+            if (o[1] === '914') return; // TODO: draw text
             let res = this.generateImageData(o, (OBJECTS as any)[o[1]]);
             if (!res) return;
             data.vertices.push(...res[0]);
