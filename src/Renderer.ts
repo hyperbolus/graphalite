@@ -66,6 +66,7 @@ export class Renderer {
     }
 
     destroy() {
+        // TODO: make work :)
         let gl = this.gl;
         let tus = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
         for (let i = 0; i < tus; i++) {
@@ -85,8 +86,6 @@ export class Renderer {
     }
 
     async initialize() {
-        let gl = this.gl;
-
         if (this.options.container) {
             let speed = 30
 
@@ -257,7 +256,7 @@ export class Renderer {
 
         // Housekeeping
         this.camera.dirty = false;
-        if (Renderer.debug) {
+        if (this.options.debug) {
             if (this.pane) this.pane.refresh();
             this.fps = 1000 / (Date.now() - START_TIME);
             this.time++;
@@ -267,20 +266,14 @@ export class Renderer {
 
     generateObjData(objs: any[]): any {
         const data: any = {colors: [], texcoords: [], vertices: []};
-
-        objs.forEach((o) => {
-            if (o[1] === '914') return; // TODO: draw text
-            let res = this.generateImageData(o, (OBJECTS as any)[o[1]]);
-            if (!res) return;
-            data.vertices.push(...res[0]);
-            data.texcoords.push(...res[1]);
-            data.colors.push(...res[2]);
-        })
-
+        // TODO: pre-sorted sections
+        for (let i = 0, n = objs.length; i < n; ++i) this.generateImageData(objs[i], data);
         return data;
     }
 
-    generateImageData(o: any, image: any) {
+    generateImageData(o: any, data: any, image: any = (OBJECTS as any)[o[1]]) {
+        if (o[1] === '914') return; // TODO: draw text
+
         const cm = this.camera, cv = this.canvas;
         const cdf = this.flags.cullDistanceFactor * this.camera.zoom;
         const fx = cv.width / cdf, fy = cv.height / cdf; // TODO: tune this numbers / setting + edge cuttoff too early
@@ -291,6 +284,7 @@ export class Renderer {
 
         // ---------- Vertices ----------
         let x = o[2], y = -o[3], a = o[6];
+        // TODO: precalc this
         a -= 90 * s['textureRotated']; // If sprite rotated on sprite sheet
         a += (OBJECTS as any)['rot'] ?? 0;
         a *= DEG2PI; // Convert from radians
@@ -353,14 +347,14 @@ export class Renderer {
 
         let z = ((image['default_z_layer'] ?? 0) * 1000) + ((image['default_z_order'] ?? 0) + 100);
 
-        const vertices = [
+        data.vertices.push(
             ...rotatePoint(verts[0][0], verts[0][1], x, y, a), z,
             ...rotatePoint(verts[1][0], verts[1][1], x, y, a), z,
             ...rotatePoint(verts[2][0], verts[2][1], x, y, a), z,
             ...rotatePoint(verts[3][0], verts[3][1], x, y, a), z,
             ...rotatePoint(verts[4][0], verts[4][1], x, y, a), z,
             ...rotatePoint(verts[5][0], verts[5][1], x, y, a), z,
-        ];
+        )
 
         // ---------- Texture coordinates ----------
         let aw = Level.atlases[s.atlas].width;
@@ -379,31 +373,23 @@ export class Renderer {
         // Include texture unit for vertex
         const t = Level.atlases[s.atlas].tid ?? 0;
 
-        const texcoords = [
+        data.texcoords.push(
             sx, sy, t,
             sx, ly, t,
             lx, ly, t,
             sx, sy, t,
             lx, sy, t,
             lx, ly, t,
-        ];
+        )
 
         // TODO: Use types or something do this isn't ugly
         let c: any = this.level?.colors[o[22] ?? image['default_base_color_channel'] ?? 1008] ?? {r: 1, g: 1, b: 1, a: 1};
         c = [c.r, c.g, c.b, c.a];
-        const colors = [...c, ...c, ...c, ...c, ...c, ...c];
+        data.colors.push(...c, ...c, ...c, ...c, ...c, ...c);
 
         if (image.hasOwnProperty('children')) {
-            for (let i = 0; i < image.children.length; i++) {
-                let res = this.generateImageData(o, image.children[i]);
-                if (!res) continue;
-                vertices.push(...res[0]);
-                texcoords.push(...res[1]);
-                colors.push(...res[2]);
-            }
+            for (let i = 0; i < image.children.length; i++) this.generateImageData(o, data, image.children[i]);
         }
-
-        return [vertices, texcoords, colors]
     }
 
     drawGrid(matrix: m4.Mat4) {
@@ -412,6 +398,7 @@ export class Renderer {
         let gl = this.gl, cm = this.camera, cv = this.canvas;
         const data: any = {vertices: [], texcoods: [], colors: []};
 
+        // TODO: precalculate array size
         // Vertical Lines
         for (let i = cm.x - cm.x % 30 - (cv.width - cv.width % 30); i < cm.x + cv.width; i += 30) {
             data.vertices.push(i - 15, -cm.y + cv.height, i - 15, -cm.y - cv.height);
