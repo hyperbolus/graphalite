@@ -12,7 +12,7 @@ export class Texture {
 
     isSet: boolean = false;
 
-    tid?: number;
+    tid: number = 0;
     renderer: Renderer
 
     constructor(renderer: Renderer, url: string) {

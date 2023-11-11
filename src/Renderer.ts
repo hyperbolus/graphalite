@@ -7,9 +7,10 @@ import {Level} from "./Level";
 import OBJECTS from "./objects.json"
 import {Pane} from 'tweakpane';
 import {ReadonlyMat4, vec2} from "gl-matrix";
-import {bufferVertexAttribute, COL_BG, DEG2PI, rotatePoint} from "./util";
+import {bufferVertexAttribute, clamp, COL_BG, DEG2PI, rotatePoint} from "./util";
 import {Annotation} from "./Annotation";
 import {RendererOptions} from "./RendererOptions";
+import {GameObject} from "./GameObject";
 
 export class Renderer {
     gl: WebGL2RenderingContext;
@@ -141,7 +142,7 @@ export class Renderer {
             resizeCanvasToDisplaySize(this.canvas);
         });
 
-        if (this.debug) {
+        if (this.options.devTools) {
             this.pane = new Pane()
 
             // FIXME: on('change') doesn't work causes infinite loop
@@ -189,10 +190,12 @@ export class Renderer {
             // Lets us communicate with our shaders
             this.data['a_position'] = gl.getAttribLocation(program, "a_position");
             this.data['a_texcoord'] = gl.getAttribLocation(program, "a_texcoord");
-            this.data['a_color'] = gl.getAttribLocation(program, "a_color");
+            //this.data['a_color'] = gl.getAttribLocation(program, "a_color");
             this.data['a_texi'] = gl.getAttribLocation(program, "a_texi");
+            this.data['a_colorChannelID'] = gl.getAttribLocation(program, "a_colorChannelID");
             this.data['u_matrix'] = gl.getUniformLocation(program, "u_matrix");
             this.data['u_texture'] = gl.getUniformLocation(program, "u_texture");
+            this.data['u_colorChannels'] = gl.getUniformLocation(program, "u_colorChannels");
 
             // Actually render the full resolution of the canvas
             gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -216,13 +219,13 @@ export class Renderer {
             this.drawGrid(matrix);
 
             // Nothing else to draw
-            if (!this.level?.objects) return;
+            if (!this.level?.sections) return;
 
-            const objData = this.generateObjData(this.level.objects)
-            this.flags.objsDrawn = objData.vertices.length / 6;
-            bufferVertexAttribute(gl, objData.vertices, this.data['a_position'], 3);
+            const objData = this.generateObjData(this.level.sections)
+            this.flags.objsDrawn = objData.vertices.length;
+            bufferVertexAttribute(gl, objData.vertices, this.data['a_position'], 2);
             bufferVertexAttribute(gl, objData.texcoords, this.data['a_texcoord'], 3);
-            bufferVertexAttribute(gl, objData.colors, this.data['a_color'], 4);
+            bufferVertexAttribute(gl, objData.colors, this.data['a_colorChannelID'], 1);
 
             // Levels primarily use 3 sprite sheets. Let's activate them.
             Level.atlases[Object.keys(Level.atlases)[0]].set(gl.TEXTURE0);
@@ -230,6 +233,13 @@ export class Renderer {
             Level.atlases[Object.keys(Level.atlases)[2]].set(gl.TEXTURE2);
             // Tell the shader what texture units to look in
             gl.uniform1iv(this.data['u_texture'], [0, 1, 2]);
+
+            const colors = [];
+            for (let i = 0; i < this.level.colors.length; i++) {
+                let c = this.level.colors[i];
+                colors.push(c.r, c.g, c.b, c.a)
+            }
+            gl.uniform4fv(this.data['u_colorChannels'], colors);
 
             // Position annotations to world space
             if (Annotation.overlay instanceof HTMLElement) {
@@ -251,181 +261,88 @@ export class Renderer {
             gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE);
 
             // Send it to da GPU :)
-            gl.drawArrays(gl.TRIANGLES, 0, objData.vertices.length / 3);
+            gl.drawArrays(gl.TRIANGLES, 0, objData.colors.length);
         }
 
         // Housekeeping
         this.camera.dirty = false;
-        if (this.options.debug) {
+        if (this.options.devTools) {
             if (this.pane) this.pane.refresh();
-            this.fps = 1000 / (Date.now() - START_TIME);
+            this.fps = Date.now() - START_TIME;
             this.time++;
         }
         requestAnimationFrame(this.draw.bind(this));
     }
 
-    generateObjData(objs: any[]): any {
-        const data: any = {colors: [], texcoords: [], vertices: []};
-        // TODO: pre-sorted sections
-        for (let i = 0, n = objs.length; i < n; ++i) this.generateImageData(objs[i], data);
+    generateObjData(sections: GameObject[][]): any {
+        const data: {[key: string]: number[]} = {vertices: [], texcoords: [], colors: []};
+        let cx = this.camera.x;
+        let cw = this.canvas.width;
+        let cz = this.camera.zoom;
+        let start = Math.max(0, Math.trunc((cx - cw / cz / 2) / 100))
+        let end = Math.min(sections.length, Math.trunc((cx + cw / cz / 2) / 100) + 1);
+        for (let i = start; i < end; i++) {
+            if (typeof sections[i] === 'undefined') continue;
+
+            // Each object in section
+            for (let j = 0, jN = sections[i].length; j < jN; j++) {
+                if (sections[i][j].id === 914) continue; // TODO: draw text
+
+                for (let k = 0; k < sections[i][j].sprites.length; k++) {
+                    data.vertices.push(...sections[i][j].sprites[k].vertices);
+                    data.texcoords.push(...sections[i][j].sprites[k].texcoords);
+                    data.colors.push(...sections[i][j].sprites[k].colors);
+                }
+            }
+        }
+
         return data;
-    }
-
-    generateImageData(o: any, data: any, image: any = (OBJECTS as any)[o[1]]) {
-        if (o[1] === '914') return; // TODO: draw text
-
-        const cm = this.camera, cv = this.canvas;
-        const cdf = this.flags.cullDistanceFactor * this.camera.zoom;
-        const fx = cv.width / cdf, fy = cv.height / cdf; // TODO: tune this numbers / setting + edge cuttoff too early
-        if (o[2] < cm.x - fx || o[2] > cm.x + fx || o[3] < cm.y - fy || o[3] > cm.y + fy) return; // cull objs
-
-        const s = Level.sprites[image.texture];
-        if (!s) throw new Error(`Missing object ${o[1]}`)
-
-        // ---------- Vertices ----------
-        let x = o[2], y = -o[3], a = o[6];
-        // TODO: precalc this
-        a -= 90 * s['textureRotated']; // If sprite rotated on sprite sheet
-        a += (OBJECTS as any)['rot'] ?? 0;
-        a *= DEG2PI; // Convert from radians
-
-        // TODO: scan file name -uhd, -hd to get scaling size
-        let w = s['spriteSize'][0] / 4, h = s['spriteSize'][1] / 4;
-
-        // x += s['spriteOffset'][0] / 4;
-        // y += s['spriteOffset'][1] / 4;
-
-        x += (OBJECTS as any)['x'] ?? 0;
-        y -= (OBJECTS as any)['y'] ?? 0;
-
-        x += (OBJECTS as any)['anchor_x'] ?? 0;
-        y += (OBJECTS as any)['anchor_y'] ?? 0;
-
-        let verts: number[][] = [
-            [x, y],
-            [x, y+h],
-            [x+w, y+h],
-            [x, y],
-            [x+w, y],
-            [x+w, y+h],
-        ];
-
-        if (o[4] && !((OBJECTS as any)['flip_x'] ?? 0)) {
-            for (let i = 0; i < verts.length; i++) {
-                verts[i][0] -= 15;
-                verts[i][0] -= x;
-            }
-
-            for (let i = 0; i < verts.length; i++) {
-                verts[i][0] *= -1;
-            }
-
-            for (let i = 0; i < verts.length; i++) {
-                verts[i][0] += 15;
-                verts[i][0] += x;
-            }
-        }
-
-        if (o[5] && !((OBJECTS as any)['flip_y'] ?? 0)) {
-            for (let i = 0; i < verts.length; i++) {
-                verts[i][1] -= 15;
-                verts[i][1] -= y;
-            }
-
-            for (let i = 0; i < verts.length; i++) {
-                verts[i][1] *= -1;
-            }
-
-            for (let i = 0; i < verts.length; i++) {
-                verts[i][1] += 15;
-                verts[i][1] += y;
-            }
-        }
-
-        y += 15;
-        x += 15;
-
-        let z = ((image['default_z_layer'] ?? 0) * 1000) + ((image['default_z_order'] ?? 0) + 100);
-
-        data.vertices.push(
-            ...rotatePoint(verts[0][0], verts[0][1], x, y, a), z,
-            ...rotatePoint(verts[1][0], verts[1][1], x, y, a), z,
-            ...rotatePoint(verts[2][0], verts[2][1], x, y, a), z,
-            ...rotatePoint(verts[3][0], verts[3][1], x, y, a), z,
-            ...rotatePoint(verts[4][0], verts[4][1], x, y, a), z,
-            ...rotatePoint(verts[5][0], verts[5][1], x, y, a), z,
-        )
-
-        // ---------- Texture coordinates ----------
-        let aw = Level.atlases[s.atlas].width;
-        let ah = Level.atlases[s.atlas].height;
-        let sx = s['textureRect'][0][0];
-        let sy = s['textureRect'][0][1];
-        let lx = s['textureRect'][1][0];
-        let ly = s['textureRect'][1][1];
-
-        // Just kinda cleaner. Also reduce normalization (division) operations
-        lx = (sx + lx) / aw;
-        ly = (sy + ly) / ah;
-        sx /= aw;
-        sy /= ah;
-
-        // Include texture unit for vertex
-        const t = Level.atlases[s.atlas].tid ?? 0;
-
-        data.texcoords.push(
-            sx, sy, t,
-            sx, ly, t,
-            lx, ly, t,
-            sx, sy, t,
-            lx, sy, t,
-            lx, ly, t,
-        )
-
-        // TODO: Use types or something do this isn't ugly
-        let c: any = this.level?.colors[o[22] ?? image['default_base_color_channel'] ?? 1008] ?? {r: 1, g: 1, b: 1, a: 1};
-        c = [c.r, c.g, c.b, c.a];
-        data.colors.push(...c, ...c, ...c, ...c, ...c, ...c);
-
-        if (image.hasOwnProperty('children')) {
-            for (let i = 0; i < image.children.length; i++) this.generateImageData(o, data, image.children[i]);
-        }
     }
 
     drawGrid(matrix: m4.Mat4) {
         if (!this.bgs[1]?.loaded) return;
         // For cleanliness
-        let gl = this.gl, cm = this.camera, cv = this.canvas;
+        let gl = this.gl, cv = this.canvas;
+        const {x, y, zoom: zm} = this.camera;
         const data: any = {vertices: [], texcoods: [], colors: []};
 
+        // Lines drawn every nth units
+        let sF = 30;
+
+        if (zm >= 2) sF = 15;
+        if (zm >= 4) sF = 2;
+        if (zm === 5) sF = 1;
+
+        let a = clamp(zm * (10 / 3) - 6 / 9, 0, 1);
+
+        // TODO: lighter sub-grid
         // TODO: precalculate array size
         // Vertical Lines
-        for (let i = cm.x - cm.x % 30 - (cv.width - cv.width % 30); i < cm.x + cv.width; i += 30) {
-            data.vertices.push(i - 15, -cm.y + cv.height, i - 15, -cm.y - cv.height);
-            data.texcoods.push(0, 0, 0, 0, 1, 0)
-            data.colors.push(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0,)
+        for (let i = x - x % sF - (cv.width / zm - cv.width / zm % sF); i < x + cv.width / zm; i += sF) {
+            data.vertices.push(i - 15, -y + cv.height / zm, i - 15, -y - cv.height / zm);
+            data.texcoods.push(0, 0, 9, 0, 0, 9);
+            data.colors.push(1011, 1011);
         }
 
         // Horizontal Lines
-        for (let i = cm.y - cm.y % 30 - (cv.height - cv.height % 30); i < cm.y + (cv.height - cv.height % 30); i += 30) {
-            data.vertices.push(cm.x - cv.width, -i - 15, cv.width + cm.x, -i - 15);
-            data.texcoods.push(0, 0, 0, 0, 1, 0);
-            data.colors.push(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+        for (let i = y - y % sF - (cv.height / zm - cv.height / zm % sF); i < y + (cv.height / zm - cv.height / zm % sF); i += sF) {
+            data.vertices.push(x - cv.width / zm, -i - 15, cv.width / zm + x, -i - 15);
+            data.texcoods.push(0, 1, 9, 0, 1, 9);
+            data.colors.push(1011, 1011);
         }
 
         // Ground Line
-        data.vertices.push(cm.x - cv.width, +15, cm.x + cv.width, +15);
-        data.texcoods.push(0, 0, 0, 0, 1, 0);
-        data.colors.push(1, 1, 1, 1.0, 1, 1, 1, 1.0);
+        data.vertices.push(x - cv.width / zm, 15, x + cv.width / zm, 15);
+        data.texcoods.push(0, 1, 9, 0, 1, 9);
+        data.colors.push(1008, 1008);
 
-        // TODO: it's reading a texture, make it be pure white or something
+        if (this.level) this.level.colors[1011].a = a;
+
         gl.useProgram(this.pInfo.program);
         bufferVertexAttribute(gl, data.vertices, this.data['a_position'], 2);
         bufferVertexAttribute(gl, data.texcoods, this.data['a_texcoord'], 3);
-        bufferVertexAttribute(gl, data.colors, this.data['a_color'], 4);
+        bufferVertexAttribute(gl, data.colors, this.data['a_colorChannelID'], 1);
 
-        this.bgs[1].set() // Activate texture
-        gl.uniform1iv(this.data['u_texture'], [0, 0, 0]); // Expects three values (I think)
         gl.uniformMatrix4fv(this.data['u_matrix'], false, matrix); // Use our world space matrix
 
         gl.drawArrays(gl.LINES, 0, data.vertices.length / 2);
@@ -452,10 +369,14 @@ export class Renderer {
             1, 0, 0,
             1, 1, 0,
         ], this.data['a_texcoord'], 3);
-        // FIXME: initial draw white. maybe loading screen?
-        let _ = this.level?.colors[COL_BG] ?? {r: 1, g: 1, b: 1, a: 1};
-        let c = [_.r, _.g, _.b, _.a];
-        bufferVertexAttribute(gl, [...c, ...c, ...c, ...c, ...c, ...c], this.data['a_color'], 4);
+        bufferVertexAttribute(gl, [
+            COL_BG,
+            COL_BG,
+            COL_BG,
+            COL_BG,
+            COL_BG,
+            COL_BG,
+        ], this.data['a_colorChannelID'], 1);
 
         // We don't need to go hard, just use a new matrix and keep it in place. TODO: parallax?
         let matrix = m4.ortho(0, gl.canvas.width, gl.canvas.height, 0, -1, 1);

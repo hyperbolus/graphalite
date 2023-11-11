@@ -22,6 +22,7 @@ import {Texture} from "./Texture";
         canvas: document.getElementById('display'),
         overlay: document.getElementById('overlay'),
         container: document.getElementById('container'),
+        devTools: true
     });
 
     await Level.loadAtlas(renderer, ATLAS_1, P_ATLAS_1, 0);
@@ -32,11 +33,11 @@ import {Texture} from "./Texture";
     await renderer.initialize();
 
     renderer.loadLevel(LEVEL);
-    if (renderer.level) {
-        renderer.level.annotations = [
-            new Annotation(90, 150, `<h2>OwO, What's This?</h2><p>It's a level annotation! These can be made by creators, added by users (à la Genius annotations), or used by level reviews to highlight parts of levels with their thoughts!</p>`),
-            new Annotation(600, 600, `<p>*stanley parable voice* this, is where there is nothing</p>`),
-        ]
-    }
+    // if (renderer.level) {
+    //     renderer.level.annotations = [
+    //         new Annotation(90, 150, `<h2>OwO, What's This?</h2><p>It's a level annotation! These can be made by creators, added by users (à la Genius annotations), or used by level reviews to highlight parts of levels with their thoughts!</p>`),
+    //         new Annotation(600, 600, `<p>*stanley parable voice* this, is where there is nothing</p>`),
+    //     ]
+    // }
     requestAnimationFrame(renderer.draw.bind(renderer));
 })()

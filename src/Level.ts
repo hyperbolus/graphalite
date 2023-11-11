@@ -16,28 +16,26 @@ import BLOCKS from './blocks.json'
 import {Texture} from "./Texture";
 import {Annotation} from "./Annotation";
 import {Renderer} from "./Renderer";
+import {GameObject} from "./GameObject";
 
 export class Level {
-    objects: any;
-
+    sections: GameObject[][] = [];
     annotations: Annotation[] = [];
-
-    colors: RGBA[] = Array(1010).fill(structuredClone({r: 1, g: 1, b: 1, a: 1}));
-
+    colors: RGBA[] = Array(1012);
     static sprites: any = {};
-
-    static blocks: any = BLOCKS;
-
     static atlases: { [key: string]: Texture } = {};
 
     constructor(string: string) {
         let objs = string.split(';');
 
         objs.pop(); // Remove trailing ;
-        this.objects = objs.map(o => keyed2obj(o, ','));
+        objs = objs.map(o => keyed2obj(o, ','));
 
-        let start = this.objects.shift();
+        for (let i = 0; i < this.colors.length; i++) {
+            this.colors[i] = {r: 1, g: 1, b: 1, a: 1}
+        }
 
+        let start: any = objs.shift();
         for (let key in start) {
             switch (key) {
                 case 'kS38':
@@ -56,18 +54,12 @@ export class Level {
             }
         }
 
-        this.objects.forEach((o: any) => {
-            o[2] = o[2]|0; // X
-            o[3] = o[3]|0; // Y
-
-            o[4] ??= 0; // Flip X
-            o[5] ??= 0; // Flip Y
-
-            o[6] ??= 0; // Rotation
-
-            o[24] ??= 0;
-            o[25] ??= 0;
-        });
+        for (let i = 0, n = objs.length; i < n; i++) {
+            // TODO: check for negative section ids
+            const id = (parseInt(objs[i][2]) - parseInt(objs[i][2]) % 100) / 100;
+            if (!this.sections[id]) this.sections[id] = [];
+            this.sections[(parseInt(objs[i][2]) - parseInt(objs[i][2]) % 100) / 100].push(new GameObject(objs[i]))
+        }
 
         // this.colors[1] = {r: 1, g: 0, b: 0, a: 1};
         // this.colors[2] = {r: 0, g: 1, b: 0, a: 1};
@@ -83,7 +75,8 @@ export class Level {
         // this.colors[COL_P2] = {r: 0, g: 0, b: 0, a: 1};
         // this.colors[COL_LBG] = {r: 0, g: 0, b: 0, a: 1};
         // this.colors[COL_G2] = {r: 0, g: 0, b: 0, a: 1};
-        // this.colors[COL_BLACK] = {r: 1, g: 0, b: 0, a: 1};
+        this.colors[COL_BLACK] = {r: 0, g: 0, b: 0, a: 1};
+        this.colors[1011] = {r: 0, g: 0, b: 0, a: 1};
     }
 
     static parsePlist(string: string, name: string) {
@@ -107,7 +100,7 @@ export class Level {
 
     static async loadAtlas(renderer: Renderer, path: string, plist: string, tid?: number) {
         Level.atlases[path] = new Texture(renderer, path);
-        Level.atlases[path].tid = tid;
+        Level.atlases[path].tid = tid ?? 0;
         this.parsePlist(await fetch(plist).then(res => res.text()), path);
     }
 }
