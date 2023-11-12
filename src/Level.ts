@@ -1,18 +1,9 @@
 import {
-    COL_3DL,
-    COL_BG,
-    COL_BLACK, COL_G1,
-    COL_G2,
-    COL_LBG,
-    COL_LINE,
-    COL_OBJ,
-    COL_P1,
-    COL_P2,
+    COL_BLACK,
     dict2obj,
     keyed2obj,
     RGBA
 } from "./util";
-import BLOCKS from './blocks.json'
 import {Texture} from "./Texture";
 import {Annotation} from "./Annotation";
 import {Renderer} from "./Renderer";
@@ -61,20 +52,6 @@ export class Level {
             this.sections[(parseInt(objs[i][2]) - parseInt(objs[i][2]) % 100) / 100].push(new GameObject(objs[i]))
         }
 
-        // this.colors[1] = {r: 1, g: 0, b: 0, a: 1};
-        // this.colors[2] = {r: 0, g: 1, b: 0, a: 1};
-        // this.colors[3] = {r: 0, g: 0, b: 1, a: 1};
-        // this.colors[4] = {r: 1, g: 1, b: 1, a: 1};
-
-        // this.colors[COL_BG] = {r: 0, g: 0, b: 0, a: 1};
-        // this.colors[COL_G1] = {r: 0, g: 0, b: 0, a: 1};
-        // this.colors[COL_LINE] = {r: 0, g: 0, b: 0, a: 1};
-        // this.colors[COL_3DL] = {r: 0, g: 0, b: 0, a: 1};
-        // this.colors[COL_OBJ] = {r: 0, g: 0, b: 0, a: 1};
-        // this.colors[COL_P1] = {r: 0, g: 0, b: 0, a: 1};
-        // this.colors[COL_P2] = {r: 0, g: 0, b: 0, a: 1};
-        // this.colors[COL_LBG] = {r: 0, g: 0, b: 0, a: 1};
-        // this.colors[COL_G2] = {r: 0, g: 0, b: 0, a: 1};
         this.colors[COL_BLACK] = {r: 0, g: 0, b: 0, a: 1};
         this.colors[1011] = {r: 0, g: 0, b: 0, a: 1};
     }

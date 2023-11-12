@@ -1,9 +1,9 @@
 {
   "name": "graphalite",
   "license": "MIT",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
-  "main": "src/lib.ts",
+  "main": "index.ts",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
